@@ -3,165 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Computing Notebook</title>
+    <title>Cloud Computing | Table of Contents</title>
+    <!-- Elegant Serif Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0f172a;
-            --bg-card: rgba(30, 41, 59, 0.6);
-            --text-main: #f8fafc;
-            --text-muted: #cbd5e1;
-            --accent: #3b82f6;
-            --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            /* Light Theme (Classic Book) */
+            --bg-paper: #FAF9F6;
+            --text-ink: #2c2a29;
+            --text-light: #595552;
+            --accent: #8c2a2a;
+            --border: #e6e2db;
+            --theme-icon: "🌙 Dark Mode";
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme (Elegant Night) */
+            --bg-paper: #1a1918;
+            --text-ink: #e0dbd5;
+            --text-light: #9e988f;
+            --accent: #d95c5c;
+            --border: #33312e;
+            --theme-icon: "☀️ Light Mode";
         }
 
         body {
+            font-family: 'Lora', serif;
+            background-color: var(--bg-paper);
+            color: var(--text-ink);
             margin: 0;
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
+            padding: 0;
+            line-height: 1.8;
+            transition: background-color 0.3s, color 0.3s;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4" fill="none"/><circle cx="2" cy="2" r="0.5" fill="rgba(128,128,128,0.05)"/></svg>');
+        }
+
+        /* Top Bar */
+        .top-bar {
             display: flex;
-            flex-direction: column;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
-            background-attachment: fixed;
+            justify-content: flex-end;
+            padding: 20px 40px;
         }
 
-        .hero {
-            text-align: center;
-            padding: 100px 20px 60px;
-        }
-
-        .hero h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 4.5rem;
-            font-weight: 900;
-            margin: 0 0 20px 0;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -1.5px;
-        }
-
-        .hero p {
-            font-size: 1.25rem;
-            color: var(--text-muted);
-            max-width: 600px;
-            margin: 0 auto;
-            line-height: 1.6;
-        }
-
-        .lectures-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 0 20px 60px;
-            display: grid;
-            gap: 20px;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        }
-
-        .lecture-card {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 30px;
-            text-decoration: none;
-            color: var(--text-main);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(12px);
-            display: block;
-        }
-
-        .lecture-card:hover {
-            transform: translateY(-8px);
-            background: rgba(255, 255, 255, 0.03);
-            border-color: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.2);
-        }
-
-        .card-number {
-            font-family: 'Outfit', sans-serif;
-            font-size: 3rem;
-            font-weight: 900;
-            opacity: 0.1;
-            position: absolute;
-            top: -10px;
-            right: 20px;
-            transition: opacity 0.3s;
-        }
-
-        .lecture-card:hover .card-number {
-            opacity: 0.3;
-            color: var(--accent);
-        }
-
-        .card-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 15px;
-            position: relative;
-        }
-
-        .card-desc {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-
-        .read-btn {
-            display: inline-block;
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-ink);
             padding: 8px 16px;
-            background: rgba(59, 130, 246, 0.1);
-            color: #60a5fa;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.9rem;
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 20px;
             transition: all 0.2s;
         }
 
-        .lecture-card:hover .read-btn {
-            background: var(--accent);
-            color: white;
+        .theme-toggle:hover {
+            border-color: var(--text-light);
+        }
+
+        .theme-toggle::after {
+            content: var(--theme-icon);
+        }
+
+        .book-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 40px 100px;
+        }
+
+        .title-page {
+            text-align: center;
+            margin-bottom: 80px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 60px;
+        }
+
+        .title-page h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
+            font-weight: 700;
+            margin: 0 0 15px 0;
+            color: var(--text-ink);
+            letter-spacing: -1px;
+        }
+
+        .title-page .subtitle {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            font-style: italic;
+            color: var(--text-light);
+            margin-bottom: 40px;
+        }
+
+        .title-page .author {
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--text-light);
+        }
+
+        .table-of-contents {
+            margin-top: 40px;
+            padding: 0 40px;
+        }
+
+        .toc-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.2rem;
+            text-align: center;
+            margin-bottom: 60px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .chapter-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .chapter-item {
+            margin-bottom: 35px;
+            position: relative;
+        }
+
+        .chapter-link {
+            display: flex;
+            align-items: baseline;
+            text-decoration: none;
+            color: var(--text-ink);
+            transition: color 0.2s;
+        }
+
+        .chapter-link:hover {
+            color: var(--accent);
+        }
+
+        .chapter-number {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            font-style: italic;
+            width: 50px;
+            color: var(--text-light);
+            transition: color 0.2s;
+        }
+
+        .chapter-link:hover .chapter-number {
+            color: var(--accent);
+        }
+
+        .chapter-title {
+            font-size: 1.25rem;
+            flex-grow: 1;
+            position: relative;
+            background: var(--bg-paper);
+            padding-right: 15px;
+            z-index: 2;
+            transition: background-color 0.3s;
+        }
+
+        .chapter-desc {
+            display: block;
+            font-size: 1rem;
+            color: var(--text-light);
+            margin-top: 8px;
+            margin-left: 50px;
+            font-style: italic;
+        }
+
+        .dotted-leader {
+            flex-grow: 1;
+            border-bottom: 2px dotted rgba(128, 128, 128, 0.4);
+            margin: 0 15px;
+            position: relative;
+            top: -6px;
+            z-index: 1;
+        }
+        
+        .page-number {
+            font-family: 'Playfair Display', serif;
+            color: var(--text-light);
+            background: var(--bg-paper);
+            padding-left: 15px;
+            z-index: 2;
+            font-style: italic;
+            font-size: 1.2rem;
+            transition: background-color 0.3s;
         }
 
         @media (max-width: 768px) {
-            .hero h1 { font-size: 3rem; }
-            .lectures-container { grid-template-columns: 1fr; }
+            .table-of-contents { padding: 0; }
+            .title-page h1 { font-size: 3rem; }
+            .chapter-link { flex-wrap: wrap; }
+            .dotted-leader, .page-number { display: none; }
         }
     </style>
 </head>
 <body>
+    
+    <div class="top-bar">
+        <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()"></button>
+    </div>
 
-    <header class="hero">
-        <h1>Cloud Computing</h1>
-        <p>A comprehensive notebook covering cloud architecture, virtualization, deployment models, and industry best practices.</p>
-    </header>
+    <div class="book-container">
+        <div class="title-page">
+            <h1>Cloud Computing</h1>
+            <div class="subtitle">A Comprehensive Notebook</div>
+            <div class="author">Semester 7</div>
+        </div>
 
-    <main class="lectures-container">
-        <!-- Lecture 1 Card -->
-        <a href="lecture1.html" class="lecture-card">
-            <div class="card-number">01</div>
-            <div class="card-title">Week 5 - Handbook</div>
-            <div class="card-desc">Elastic computing, data centers, virtualization, and public/private cloud models.</div>
-            <div class="read-btn">Read Lecture →</div>
-        </a>
+        <div class="table-of-contents">
+            <h2 class="toc-title">Table of Contents</h2>
+            <ul class="chapter-list">
+                
+                <li class="chapter-item">
+                    <a href="lecture1.html" class="chapter-link">
+                        <span class="chapter-number">I.</span>
+                        <span class="chapter-title">Elastic Computing & the Cloud Landscape</span>
+                        <div class="dotted-leader"></div>
+                        <span class="page-number">1</span>
+                    </a>
+                    <span class="chapter-desc">Data centers, virtualization, and public vs private cloud models.</span>
+                </li>
 
-        <!-- Add more lecture cards here in the future -->
-        <!--
-        <a href="lecture2.html" class="lecture-card">
-            <div class="card-number">02</div>
-            <div class="card-title">Next Lecture Title</div>
-            <div class="card-desc">Brief description of what this lecture covers.</div>
-            <div class="read-btn">Read Lecture →</div>
-        </a>
-        -->
-    </main>
+            </ul>
+        </div>
+    </div>
 
+    <script>
+        // Theme management
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme) {
+            document.body.setAttribute('data-theme', currentTheme);
+        }
+
+        function toggleTheme() {
+            if (document.body.getAttribute('data-theme') === 'dark') {
+                document.body.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.body.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+    </script>
 </body>
 </html>
