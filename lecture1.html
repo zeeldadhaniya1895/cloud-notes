@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecture 1 - Cloud Computing</title>
+    <!-- Marked.js for parsing Markdown to HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            --accent: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+        }
+
+        nav {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+        }
+
+        .back-btn {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .back-btn:hover {
+            color: white;
+        }
+        
+        .back-btn span {
+            margin-right: 8px;
+            font-size: 1.2em;
+        }
+
+        #content-wrapper {
+            padding: 40px 20px;
+        }
+
+        #content {
+            max-width: 850px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            padding: 50px 60px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+            line-height: 1.8;
+            font-size: 1.05rem;
+            color: var(--text-muted);
+        }
+
+        /* Markdown Styling */
+        #content h1, #content h2, #content h3, #content h4 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-main);
+            margin-top: 2em;
+            margin-bottom: 0.75em;
+            font-weight: 700;
+        }
+
+        #content h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        #content h2 {
+            font-size: 1.8rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5em;
+        }
+
+        #content a {
+            color: #60a5fa;
+            text-decoration: none;
+            border-bottom: 1px dashed rgba(96, 165, 250, 0.5);
+            transition: all 0.2s;
+        }
+
+        #content a:hover {
+            color: #93c5fd;
+            border-bottom-style: solid;
+        }
+
+        #content code { 
+            background: rgba(0, 0, 0, 0.4); 
+            padding: 0.2em 0.4em; 
+            border-radius: 6px; 
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #content pre {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 20px;
+            border-radius: 12px;
+            overflow-x: auto;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 1.5em;
+        }
+
+        #content pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            color: #93c5fd;
+        }
+
+        #content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2em 0;
+            font-size: 0.95rem;
+        }
+
+        #content th, #content td {
+            padding: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: left;
+        }
+
+        #content th { 
+            background: rgba(255,255,255,0.03); 
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        #content tr:nth-child(even) {
+            background: rgba(255,255,255,0.01);
+        }
+
+        #content blockquote {
+            border-left: 4px solid #8b5cf6;
+            margin: 1.5em 0;
+            padding: 1em 1.5em;
+            background: rgba(139, 92, 246, 0.05);
+            border-radius: 0 12px 12px 0;
+            color: #e2e8f0;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            #content { padding: 30px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a href="index.html" class="back-btn"><span>←</span> Back to Home</a>
+    </nav>
+
+    <div id="content-wrapper">
+        <div id="content">
+            <div style="text-align: center; opacity: 0.5;">Loading lecture content...</div>
+        </div>
+    </div>
+
+    <script>
+        // The markdown file to load for this lecture page
+        const markdownFile = 'Cloud_Computing_Handbook.md';
+
+        marked.setOptions({
+            gfm: true,
+            breaks: true,
+            headerIds: true
+        });
+
+        async function loadContent() {
+            const contentContainer = document.getElementById('content');
+            try {
+                const response = await fetch(markdownFile);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const markdown = await response.text();
+                contentContainer.innerHTML = marked.parse(markdown);
+            } catch (error) {
+                contentContainer.innerHTML = `
+                    <div style="text-align: center; color: #ef4444;">
+                        <h2>Error loading lecture</h2>
+                        <p>Could not fetch <code>${markdownFile}</code>.</p>
+                        <p style="font-size: 0.9em; opacity: 0.8; margin-top: 20px; text-align: left; background: rgba(239, 68, 68, 0.1); padding: 15px; border-radius: 8px;">
+                            <strong>Local Viewing Note:</strong> You need to run this through a local web server (like VS Code Live Server) to load the markdown file due to browser CORS security. It will work flawlessly on GitHub Pages.
+                        </p>
+                    </div>`;
+                console.error('Error fetching markdown:', error);
+            }
+        }
+
+        loadContent();
+    </script>
+</body>
+</html>
