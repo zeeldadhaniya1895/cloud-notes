@@ -1,6 +1,7 @@
 # Virtual Machines in Cloud Computing Handbook
 ### Virtualization Mechanisms, Hypervisors, and Processor Privilege Modes
 *Based on: IT457 Cloud Computing, Week 5 – Lecture 2 (Chapter 5)*
+*Updated edition: now includes the deep-dive explanations from our discussion (Sections 11 to 15)*
 
 ---
 
@@ -20,6 +21,7 @@ At the end: a **comparison cheat sheet**, a **glossary**, a **self-test with ans
 
 ## Table of Contents
 
+**Part A: Lecture Content**
 1. [What Is a Virtual Machine?](#1-what-is-a-virtual-machine)
 2. [The Hypervisor](#2-the-hypervisor)
 3. [Three Approaches to Virtualization](#3-three-approaches-to-virtualization)
@@ -30,11 +32,22 @@ At the end: a **comparison cheat sheet**, a **glossary**, a **self-test with ans
 8. [Extending to the Hypervisor (The Diagram Explained)](#8-extending-to-the-hypervisor-the-diagram-explained)
 9. [Execution and State Transitions (4 Steps)](#9-execution-and-state-transitions-4-steps)
 10. [Hierarchy of Trust](#10-hierarchy-of-trust)
-11. [Master Comparison Cheat Sheet](#11-master-comparison-cheat-sheet)
-12. [Common Confusions Cleared](#12-common-confusions-cleared)
-13. [Glossary](#13-glossary)
-14. [Self-Test (with Answers)](#14-self-test-with-answers)
-15. [One-Page Revision Summary](#15-one-page-revision-summary)
+
+**Part B: Deep-Dive Add-ons (from our doubt-clearing discussion)**
+11. [Hypervisor from Scratch: Why It Exists and Where It Sits](#11-hypervisor-from-scratch-why-it-exists-and-where-it-sits)
+12. [Full vs Para-Virtualization: The Deep Dive](#12-full-vs-para-virtualization-the-deep-dive)
+13. [Why Para-Virtualization Gives Faster I/O](#13-why-para-virtualization-gives-faster-io)
+14. [CPU Rings and Hardware-Assisted Virtualization](#14-cpu-rings-and-hardware-assisted-virtualization)
+15. [Walkthrough: What Happens When a File Upload Arrives in a VM](#15-walkthrough-what-happens-when-a-file-upload-arrives-in-a-vm)
+
+**Part C: Revision Tools**
+16. [Master Comparison Cheat Sheet](#16-master-comparison-cheat-sheet)
+17. [Common Confusions Cleared](#17-common-confusions-cleared)
+18. [Glossary](#18-glossary)
+19. [Self-Test (with Answers)](#19-self-test-with-answers)
+20. [One-Page Revision Summary](#20-one-page-revision-summary)
+
+> **Note on sources:** Sections 1 to 10 follow your lecture slides. Sections 11 to 15 go deeper to clear the doubts you raised. Anything that goes beyond the slides is marked *(beyond the slides)*. For exams, always prefer your slide wording.
 
 ---
 
@@ -490,9 +503,337 @@ This is the reason multi-tenancy (from Lecture 1) is safe. Customers from differ
 
 ---
 
-## 11. Master Comparison Cheat Sheet
+## 11. Hypervisor from Scratch: Why It Exists and Where It Sits
 
-### 11.1 Three virtualization approaches
+### 11.1 Why a hypervisor is needed at all
+
+A normal operating system (Windows or Linux) is built on one assumption: **"I am the only boss of this machine."** It expects to control all the memory, the CPU, the disk and the network card.
+
+Now put two operating systems on one server. Both believe they own everything, so they clash:
+
+```
+OS 1: "Memory 0-8 GB is mine!"          OS 2: "No, memory 0-8 GB is mine!"
+OS 1: "I'll write to disk block 5."     OS 2: "I'll also write to disk block 5."
+```
+
+Someone must stand in the middle and keep order. That someone is the **hypervisor**.
+
+### 11.2 The three jobs of a hypervisor
+
+| Job | Meaning | Example |
+|---|---|---|
+| **Divide** the hardware | Give each VM its own share of CPU and memory | VM 1 gets 8 GB RAM and 2 CPUs. VM 2 gets 16 GB and 4 CPUs. |
+| **Isolate** the VMs | One VM can never touch another VM's memory or data | VM 1 cannot read VM 2's files. |
+| **Control the real hardware** | Only the hypervisor talks to the physical disk, network card and so on | Every disk write from a VM is carried out by the hypervisor. |
+
+### 11.3 Exact location: below all operating systems
+
+In the cloud, the hypervisor sits **directly on the server hardware and below every operating system**. There is **no "main OS" underneath it**.
+
+```
+  VM 1 (guest OS + apps)    VM 2 (guest OS + apps)    VM N
+  ───────────────────────────────────────────────────────────
+                      HYPERVISOR   <-- the real boss
+  ───────────────────────────────────────────────────────────
+                      SERVER HARDWARE
+```
+
+- The hypervisor **boots first** (your slide: "hypervisor starts first").
+- Every OS you see (Linux, Windows) is a **guest OS** running **above** it, inside a VM.
+- In CPU terms, the hypervisor runs in **hypervisor mode**, the highest privilege level, above kernel mode.
+
+### 11.4 Type 1 and Type 2 hypervisors *(beyond the slides)*
+
+| | Type 1 (bare-metal) | Type 2 (hosted) |
+|---|---|---|
+| **Runs where?** | Directly on hardware, **below** all OSes | **On top of** a normal host OS, like an ordinary program |
+| **Where used?** | **Cloud data centers** (this is what your lecture describes) | Laptops and desktops for learning and testing |
+| **Examples** | VMware ESXi, Xen, Microsoft Hyper-V | Oracle VirtualBox, VMware Workstation |
+| **Performance** | Better (no extra OS in between) | Lower (host OS sits in the middle) |
+
+**Example:** When you install VirtualBox on your Windows laptop and run Ubuntu inside it, VirtualBox sits **above** Windows. That is a Type 2 hypervisor. AWS does not do that. It runs the hypervisor straight on the server, with no Windows or Linux underneath.
+
+### 11.5 The real difficulty that leads to full and para virtualization
+
+Guest operating systems **still think they are the boss**. They will try to run **privileged instructions** (commands that control hardware, such as "write to disk" or "change memory mapping").
+
+If a guest OS ran those directly on real hardware, it could break isolation. So the hypervisor must make sure **every privileged action goes through it**.
+
+There are two ways to solve this:
+
+- **Full virtualization:** catch the guest when it tries something privileged.
+- **Para-virtualization:** teach the guest to ask the hypervisor instead.
+
+The next section explains both properly.
+
+---
+
+## 12. Full vs Para-Virtualization: The Deep Dive
+
+### 12.1 The core difference in one line
+
+Both let several operating systems share one machine. The difference is **whether the guest OS knows it is virtual**.
+
+- **Full = "You don't know you're in a VM, and I will handle it."**
+- **Para = "You know you're in a VM, so ask me."**
+
+### 12.2 Full virtualization = "fool the guest OS"
+
+**Idea:** Do not change the OS. Make the VM look **exactly like a real computer**. The guest OS keeps believing it is the boss and behaves normally. When it tries a privileged action, the hypervisor **catches it** and handles it quietly.
+
+**Example: a guest OS saves a file to disk**
+
+1. The guest OS thinks: "I'll send a command to the disk controller" (it believes the disk is real).
+2. The CPU notices a privileged action and automatically **traps**: the VM pauses and control jumps to the hypervisor.
+3. The hypervisor works out what was intended: "This is a disk write from VM 1. I'll do it safely in VM 1's own area."
+4. The hypervisor writes to the real disk.
+5. The hypervisor gives control back. The guest OS never knew anything happened.
+
+**Analogy:** Actors on a stage set. They believe it is a real house and need no special instructions. The stage crew (hypervisor) quietly steps in whenever someone is about to do something dangerous.
+
+**Result:**
+- The guest OS is **completely unmodified**, so Windows, Linux and others just work.
+- Normal instructions (arithmetic and so on) run **directly** on the real CPU at full speed.
+- Only privileged actions cause a switch to the hypervisor.
+
+### 12.3 Para-virtualization = "tell the guest OS the truth"
+
+**Idea:** Modify the guest OS so it **knows it is virtual**. Instead of attempting privileged actions and getting caught, it **asks the hypervisor directly** using special calls (hypervisor calls, or *hypercalls*).
+
+**Example: the same file save**
+
+1. The guest OS knows: "I'm in a VM. I must not touch the disk myself."
+2. It sends a direct request: **"Hypervisor, please write this to disk."**
+3. The hypervisor writes to the real disk.
+4. The hypervisor replies "done."
+
+**Analogy:** Actors who know it is a stage and have been trained: "If you need something dangerous, ask the director." Nobody needs to catch them, because they cooperate.
+
+**Result:**
+- Less catching and guessing, so it is **efficient**, especially for disk and network work.
+- But the OS's **source code must be changed**, so only OSes that someone has modified can run.
+
+### 12.4 Same task, side by side ("save a file")
+
+```
+FULL VIRTUALIZATION                     PARA-VIRTUALIZATION
+Guest OS (unmodified)                   Guest OS (modified)
+   | tries to write to the disk            | knows it is virtual
+   | (thinks it is real hardware)          |
+   v                                       v
+CPU catches it (trap)                   Calls the hypervisor directly
+   |                                       |
+   v                                       v
+Hypervisor handles it                   Hypervisor handles it
+   |                                       |
+   v                                       v
+Real disk                               Real disk
+```
+
+### 12.5 Comparison table
+
+| | Full virtualization | Para-virtualization |
+|---|---|---|
+| **Does the guest OS know it is virtual?** | **No** | **Yes** |
+| **Guest OS modified?** | **No** | **Yes** |
+| **How does the hypervisor get involved?** | It **catches** (traps) the guest | The guest **asks** (hypercall) |
+| **Compatibility** | Any standard OS, including closed ones like Windows | Only OSes someone has modified (for example open-source Linux) |
+| **Speed** | Hardware speed for normal instructions | Hardware speed, with an efficiency edge on I/O |
+| **Main limitation** | Catching and emulating privileged actions can cost time | Needs source code changes |
+
+### 12.6 Where to use which
+
+**Full virtualization is used when you must run any standard OS unchanged.**
+- Customers bring their own Windows or Linux, and you cannot modify closed-source Windows.
+- This is why it is the **default in the cloud**.
+
+**Para-virtualization is useful for: *(beyond the slides)***
+- **I/O speed (disk and network).** This is the biggest real-world use today.
+- **Older CPUs** with no hardware virtualization support, where full virtualization was slow or impossible.
+- **Open-source guests like Linux**, which can be modified easily.
+- Early Amazon EC2 ran on the **Xen** hypervisor with para-virtualized Linux guests, a well-known example.
+
+### 12.7 Modern practice: both together *(beyond the slides)*
+
+Providers today usually **combine** the two:
+- The VM runs an **unmodified OS** (full virtualization), so any customer OS works.
+- Inside it, the OS installs **para-virtualized drivers** for disk and network (VirtIO is a well-known example) for speed.
+
+So para-virtualization lives on mostly as a **performance trick for I/O**, inside fully virtualized VMs.
+
+---
+
+## 13. Why Para-Virtualization Gives Faster I/O
+
+### 13.1 The answer in one paragraph
+
+In para-virtualization, I/O is fast because the guest OS knows it is virtual, so it skips the slow step of pretending to use real hardware. Instead of writing to many small device registers (each one causing a trap into the hypervisor), it places its data in a shared memory queue and sends one direct request to the hypervisor, often handling many packets or disk blocks at once. That means far fewer switches between the VM and the hypervisor, and no need for the hypervisor to imitate a real device in software, which cuts the overhead per I/O operation.
+
+### 13.2 Full virtualization I/O (the slow path)
+
+The guest OS thinks it has a real network card or disk, so it talks to it like real hardware: by writing to many small hardware registers, one step at a time.
+
+Sending **one network packet** might look like this:
+
+1. Guest writes to register 1 (trap into the hypervisor).
+2. Guest writes to register 2 (trap again).
+3. Guest writes to register 3 (trap again).
+4. ... and so on, then waits for an interrupt that the hypervisor must fake.
+
+Each **trap** means:
+- The CPU leaves the VM and enters the hypervisor (a **VM exit**).
+- The hypervisor works out what the guest meant and **emulates the fake device** in software.
+- The CPU switches back into the VM.
+
+Each switch is expensive, and one packet can cause many of them. Multiply by thousands of packets per second and the overhead is large.
+
+### 13.3 Para-virtualization I/O (the fast path)
+
+The guest OS skips the pretend hardware and uses a driver written for the hypervisor:
+
+1. The guest puts the packet in a **shared memory area** (a queue both the guest and hypervisor can read).
+2. It sends **one notification**: "new data is ready."
+3. The hypervisor picks up the data and sends it through the real network card.
+
+### 13.4 Reasons it is faster
+
+| Reason | Effect |
+|---|---|
+| **Fewer traps** | One notification instead of many register writes |
+| **No fake hardware emulation** | The hypervisor does not have to imitate a specific real card in software |
+| **Batching** | Many packets or disk blocks can sit in the queue and be handled together |
+| **Shared memory** | Data is not copied back and forth many times |
+
+### 13.5 Analogy
+
+- **Full virtualization:** you want to order food, but the restaurant pretends to be an old-style phone system. You press a long series of buttons, and a staff member interprets each press.
+- **Para-virtualization:** you drop a complete order form in a box and ring one bell. The kitchen collects it all at once.
+
+### 13.6 Illustrative numbers (made up to show the idea)
+
+- Emulated device: 1 packet is about 10 traps.
+- Para-virtualized: 1 packet is about 1 notification, and with batching, 1 notification can cover 50 packets.
+
+Even if each switch costs the same, the second approach does a small fraction of the switching.
+
+### 13.7 Link to your slide
+
+Your slide says para-virtualization **replaces I/O and privileged calls with hypervisor traps/calls**. That is this idea: instead of risky hardware-style operations that must be intercepted one by one, the guest makes a **deliberate, direct request**.
+
+*Exam tip:* the mechanics (VirtIO, shared queues, VM exits) go beyond the slides. For exams, say: **"fewer traps, and direct calls to the hypervisor instead of emulating hardware."**
+
+---
+
+## 14. CPU Rings and Hardware-Assisted Virtualization
+
+*(beyond the slides, but it explains your slide on three modes)*
+
+### 14.1 What are CPU rings?
+
+**Rings** are privilege levels on x86 CPUs, numbered 0 to 3. A **lower number means more power**.
+
+| Ring | Who runs here | Power |
+|---|---|---|
+| **Ring 0** | OS kernel | Full hardware access |
+| Ring 1 and 2 | Rarely used | n/a |
+| **Ring 3** | User applications | Restricted |
+
+This is the same idea as your lecture's **kernel mode (ring 0)** and **user mode (ring 3)**.
+
+### 14.2 The problem with a hypervisor
+
+Both the **hypervisor** and every **guest kernel** want ring 0, but only one can have it. The hypervisor must win, because it controls everything.
+
+### 14.3 Three solutions
+
+| Approach | How it handles the ring problem |
+|---|---|
+| **1. Software tricks (early full virtualization)** | The guest kernel is pushed to a weaker ring (for example ring 1). The hypervisor traps or rewrites its privileged instructions on the fly. This is slow and complex, because some older x86 instructions misbehave instead of trapping. |
+| **2. Para-virtualization** | The guest kernel is also moved to a weaker ring, but because it was **modified**, it calls the hypervisor instead of executing risky instructions. The problem is avoided entirely. |
+| **3. Hardware-assisted virtualization (Intel VT-x, AMD-V)** | The CPU adds a **new privilege level below ring 0**, informally called **"ring -1"**. The hypervisor lives there, and the guest kernel stays in **ring 0**, believing it is in full control. |
+
+Option 3 is why **full virtualization became fast** and is the cloud standard.
+
+### 14.4 Connecting to your lecture's three modes
+
+```
+Ring -1  ->  Hypervisor mode   (hypervisor)
+Ring  0  ->  Kernel mode       (guest OS)
+Ring  3  ->  User mode         (applications)
+```
+
+Your slide's **"three hardware privilege levels"** are exactly this hardware-assisted model.
+
+*Note:* "ring -1" is an informal name. Technically, Intel and AMD describe it as separate hypervisor ("root") and guest ("non-root") modes of the CPU.
+
+---
+
+## 15. Walkthrough: What Happens When a File Upload Arrives in a VM
+
+### 15.1 The question
+When an upload request arrives at an app in a VM, control goes from the app to the kernel. Does the kernel save the file itself, or does it tell the hypervisor? When does the kernel need the hypervisor?
+
+### 15.2 Short answer
+The guest kernel handles **most of the work itself**. It involves the hypervisor only when it needs something **outside its own VM's boundaries**, such as **real hardware**.
+
+### 15.3 Step by step
+
+| Step | Who | What happens | Mode |
+|---|---|---|---|
+| 1 | **App** | Receives the upload and makes a system call: "save this file". | User mode, then switches to kernel mode |
+| 2 | **Guest kernel** | Does the OS work inside the VM: checks permissions, decides file name and location, holds the data in the VM's **RAM** (often as a cache). | Kernel mode |
+| 3 | **Guest kernel** | Needs to write to the "disk". The VM only has a **virtual disk**, so this write is **trapped** (full virtualization) or sent as a **hypervisor call** (para-virtualization). | Switch toward hypervisor mode |
+| 4 | **Hypervisor** | Stores the data on the **real physical storage**, in the area belonging to this VM. | Hypervisor mode |
+| 5 | **Hypervisor, kernel, app** | Control returns to the kernel, then to the app: "saved". | Back down to kernel, then user mode |
+
+### 15.4 What the kernel can do alone
+
+- Manage its own memory (inside the amount allocated to the VM)
+- Start, stop and schedule apps
+- Handle file system logic and permissions
+- Run ordinary system calls
+
+### 15.5 When the kernel needs the hypervisor
+
+- **Real hardware I/O:** disk, network card and other physical devices
+- **More memory** than the VM was given, or anything touching memory outside its boundaries
+- **Anything that could affect other VMs:** CPU cores, shared devices, hardware configuration
+- **Privileged actions** that only hypervisor mode may perform
+
+### 15.6 Rule of thumb
+
+- **Inside my VM's walls** -> the kernel does it alone.
+- **Outside my VM's walls, or real hardware** -> the hypervisor does it.
+
+### 15.7 Virtual disk vs virtual memory (do not mix these up)
+
+| | Virtual disk | Virtual memory |
+|---|---|---|
+| **What it is** | The **fake disk** the VM sees. To the guest OS it looks like a real hard drive. | A technique for managing **RAM** (the VM's allocated memory). |
+| **Holds** | Permanent files | Data currently in use |
+| **Where it really lives** | Typically a **file or reserved area** on the real disk, managed by the hypervisor | In the VM's allocated real RAM |
+
+So the kernel first holds the upload in the VM's **RAM**, then "writes it to the **virtual disk**". That write goes to the hypervisor, which stores it on the **real physical disk**.
+
+### 15.8 One-line flow
+
+```
+App  ->  Kernel (VM's RAM, virtual disk)  ->  Hypervisor  ->  Real physical disk
+```
+
+### 15.9 Analogy
+You write a letter and put it in your office **outbox** (virtual disk). You think it is delivered. Really, the building's **mailroom** (hypervisor) collects it and sends it through the real postal system (physical disk). The floor manager (kernel) can reorganize papers inside their own floor, but cannot use the mailroom directly.
+
+### 15.10 Why route everything through the hypervisor?
+If VM-A and VM-B both wrote straight to the real disk, they could overwrite each other's data. Routing every write through the hypervisor lets it keep each VM's data in a **separate area**. This is the **isolation** from your lecture.
+
+*Note:* your slide simplifies this by saying a system call traps "back to Kernel or Hypervisor mode". The exact details depend on the hypervisor, but the rule of thumb above is the idea to remember.
+
+---
+
+## 16. Master Comparison Cheat Sheet
+
+### 16.1 Three virtualization approaches
 
 | | Software Emulation | Para-virtualization | Full Virtualization |
 |---|---|---|---|
@@ -504,7 +845,7 @@ This is the reason multi-tenancy (from Lecture 1) is safe. Customers from differ
 | Used in cloud data centers? | No, ineligible as primary form | Limited | **Yes** |
 | Example | Java Virtual Machine | Early (1960s) hypervisor systems | EC2, Compute Engine, Azure VMs |
 
-### 11.2 The three privilege modes
+### 16.2 The three privilege modes
 
 | Mode | Runs | Privilege | Key limit |
 |---|---|---|---|
@@ -512,7 +853,7 @@ This is the reason multi-tenancy (from Lecture 1) is safe. Customers from differ
 | Kernel mode | Guest OS | Restricted | Only its own VM's memory |
 | User mode | Tenant apps | Basic | Runs natively, traps on privileged actions |
 
-### 11.3 Two-mode vs three-mode systems
+### 16.3 Two-mode vs three-mode systems
 
 | | Traditional computer | Virtualized (cloud) computer |
 |---|---|---|
@@ -520,9 +861,36 @@ This is the reason multi-tenancy (from Lecture 1) is safe. Customers from differ
 | First software to start | Operating system | Hypervisor |
 | OS power | Full control of hardware | Limited to its VM |
 
+### 16.4 Full vs para-virtualization: exam-style quick table
+
+| Question | Full virtualization | Para-virtualization |
+|---|---|---|
+| Guest knows it is virtual? | No | Yes |
+| Guest OS modified? | No | Yes |
+| Privileged action handled by | **Trap** (hypervisor catches it) | **Hypercall** (guest asks) |
+| Works with Windows? | Yes | Only if Windows is modified (practically no) |
+| Typical use today | Main cloud approach | Fast I/O drivers (VirtIO) inside fully virtualized VMs |
+| One-line memory trick | "You don't know, I'll handle it" | "You know, so ask me" |
+
+### 16.5 Hypervisor types
+
+| | Type 1 (bare-metal) | Type 2 (hosted) |
+|---|---|---|
+| Location | On hardware, below all OSes | On top of a host OS |
+| Where used | Cloud data centers | Laptops and desktops |
+| Examples | ESXi, Xen, Hyper-V | VirtualBox, VMware Workstation |
+
+### 16.6 Rings and modes mapped together
+
+| x86 ring | Lecture's mode | Runs |
+|---|---|---|
+| Ring -1 (informal) | Hypervisor mode | Hypervisor |
+| Ring 0 | Kernel mode | Guest OS |
+| Ring 3 | User mode | Applications |
+
 ---
 
-## 12. Common Confusions Cleared
+## 17. Common Confusions Cleared
 
 **Q1. What is the difference between a VM and a hypervisor?**
 The VM is the *virtual computer* (guest). The hypervisor is the *software that creates and manages* the VMs.
@@ -557,9 +925,36 @@ It configures the hardware boundaries between VMs. If it makes a mistake, one VM
 **Q11. Is the Java Virtual Machine the same as a cloud VM?**
 No. The JVM is **software emulation** (byte-code interpretation, used for portability). A cloud VM from EC2 uses **full virtualization** (a whole computer with its own OS). The names are similar, but the technologies differ.
 
+**Q12. Is the hypervisor above or below the "main OS"?**
+In the cloud, it is **below all operating systems**, directly on the hardware. There is no main OS beneath it. (Only a Type 2 hypervisor, like VirtualBox on a laptop, sits above a host OS.)
+
+**Q13. Does the guest kernel save the uploaded file directly to the real disk?**
+No. It handles the OS work inside its VM, then writes to a **virtual disk**. That write is passed to the hypervisor, which stores it on the real disk.
+
+**Q14. Is "virtual disk" the same as "virtual memory"?**
+No. Virtual disk is the fake disk the VM sees (permanent storage). Virtual memory is a RAM-management technique.
+
+**Q15. In full virtualization, does the guest OS ever interact with the hypervisor?**
+Yes, but without knowing it. When it attempts a privileged action, the hardware traps it to the hypervisor automatically.
+
+**Q16. If para-virtualization needs a modified OS, is it useless today?**
+No. It survives mainly as **para-virtualized drivers** (for example VirtIO) for disk and network inside fully virtualized VMs, giving faster I/O.
+
+**Q17. Why is para-virtualization faster for I/O?**
+The guest makes direct requests through a shared queue instead of the hypervisor emulating a fake hardware device through many traps.
+
+**Q18. What are CPU rings?**
+Privilege levels on x86 CPUs: ring 0 (kernel, most power) to ring 3 (user apps, least). Hardware-assisted virtualization adds a level below ring 0 (informally "ring -1") for the hypervisor.
+
+**Q19. Why did full virtualization become fast?**
+Because CPUs gained hardware support (Intel VT-x, AMD-V) that gives the hypervisor its own privilege level, so guest kernels can stay in ring 0 without clashing.
+
+**Q20. When does the kernel need the hypervisor?**
+For real hardware I/O, memory outside its VM, and anything that could affect other VMs. Inside its own VM's walls, the kernel works alone.
+
 ---
 
-## 13. Glossary
+## 18. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -589,9 +984,27 @@ No. The JVM is **software emulation** (byte-code interpretation, used for portab
 | **User mode** | Basic privilege level in which tenant applications run. |
 | **Virtual machine (VM)** | A software-created computer that emulates a separate physical computer. |
 
+### Additional Terms (from the deep-dive sections)
+
+| Term | Meaning |
+|---|---|
+| **AMD-V / Intel VT-x** | CPU hardware features that support virtualization by giving the hypervisor its own privilege level. |
+| **Batching** | Handling many I/O operations together in one go. |
+| **Hardware-assisted virtualization** | Virtualization made fast by special CPU support (VT-x, AMD-V). |
+| **Hypercall** | A direct request from a modified guest OS to the hypervisor. |
+| **Ring (CPU ring)** | An x86 privilege level, 0 (most privileged) to 3 (least). |
+| **Ring -1** | Informal name for the hypervisor's privilege level below ring 0. |
+| **Shared memory queue** | A memory area both guest and hypervisor can read, used for fast para-virtualized I/O. |
+| **Type 1 hypervisor** | Bare-metal hypervisor running directly on hardware (cloud). |
+| **Type 2 hypervisor** | Hosted hypervisor running on top of a normal OS (laptops). |
+| **VirtIO** | A well-known set of para-virtualized drivers for disk and network. |
+| **Virtual disk** | The fake disk a VM sees, backed by real storage managed by the hypervisor. |
+| **VM exit** | The CPU leaving a VM to run the hypervisor, usually after a trap. |
+| **Xen** | A well-known hypervisor, used in early AWS EC2. |
+
 ---
 
-## 14. Self-Test (with Answers)
+## 19. Self-Test (with Answers)
 
 ### Short-answer questions
 
@@ -634,6 +1047,33 @@ No. The JVM is **software emulation** (byte-code interpretation, used for portab
 **13. How can an application in a VM run at hardware speed?**
 *Answer:* Applications run in user mode, and non-privileged instructions execute directly on the physical CPU. The hypervisor and OS are involved only when a privileged operation causes a trap.
 
+**14. Where does the hypervisor sit relative to operating systems in a cloud server?**
+*Answer:* Directly on the hardware, **below** all guest operating systems. There is no main OS beneath it.
+
+**15. What are the three jobs of a hypervisor?**
+*Answer:* Divide the hardware among VMs, isolate the VMs from each other, and control the real hardware.
+
+**16. What is the core difference between full and para-virtualization?**
+*Answer:* In full virtualization the guest OS does not know it is virtual (unmodified) and the hypervisor catches its privileged actions through traps. In para-virtualization the guest is modified, knows it is virtual, and asks the hypervisor directly through hypercalls.
+
+**17. Why is para-virtualization faster for I/O?**
+*Answer:* The guest skips pretending to use real hardware. It uses a shared memory queue and one direct request, often for many operations at once, which means far fewer traps and no software emulation of a device.
+
+**18. Where is para-virtualization useful today?**
+*Answer:* Fast disk and network I/O through para-virtualized drivers (for example VirtIO) inside fully virtualized VMs; older CPUs without hardware support; and open-source guests like Linux that are easy to modify.
+
+**19. What are CPU rings, and how do they relate to the three modes in the lecture?**
+*Answer:* Privilege levels on x86 CPUs (0 to 3). Ring 0 is kernel mode and ring 3 is user mode. Hardware-assisted virtualization adds a level below ring 0 (informally "ring -1") for the hypervisor mode.
+
+**20. In the file-upload example, what does the guest kernel do alone, and what goes to the hypervisor?**
+*Answer:* The kernel does permission checks, file system logic and holds the data in the VM's RAM. The write to the virtual disk goes to the hypervisor, which stores it on the real physical disk.
+
+**21. Difference between a virtual disk and virtual memory?**
+*Answer:* A virtual disk is the fake permanent-storage device a VM sees, backed by real storage through the hypervisor. Virtual memory is a technique for managing RAM.
+
+**22. Type 1 vs Type 2 hypervisor?**
+*Answer:* Type 1 runs directly on hardware, below all OSes, and is used in cloud data centers (Xen, ESXi, Hyper-V). Type 2 runs on top of a host OS, for example VirtualBox on a laptop.
+
 ### Scenario questions
 
 **S1.** A company wants to run an unmodified, standard commercial operating system at near-native speed on a cloud server. Which virtualization approach makes this possible?
@@ -654,9 +1094,21 @@ No. The JVM is **software emulation** (byte-code interpretation, used for portab
 **S6.** In which mode does a customer's web application normally run, and why is it fast?
 *Answer:* **User mode.** It executes natively on the physical CPU with no translation.
 
+**S7.** You install VirtualBox on your Windows laptop and run Ubuntu in it. Which hypervisor type is VirtualBox, and why?
+*Answer:* **Type 2**, because it runs on top of a host OS (Windows) rather than directly on the hardware.
+
+**S8.** A guest OS tries to write to a disk controller without knowing it is virtual. What happens?
+*Answer:* The CPU traps the privileged action to the hypervisor, which performs the write safely on the real disk. This is **full virtualization**.
+
+**S9.** A modified Linux guest wants to write to disk and sends "hypervisor, please write this" directly. Which approach?
+*Answer:* **Para-virtualization** (a hypercall).
+
+**S10.** A provider wants customers to run any OS, but also wants fast network I/O. What combination does it use?
+*Answer:* **Full virtualization** for the unmodified OS, plus **para-virtualized drivers** (for example VirtIO) for I/O.
+
 ---
 
-## 15. One-Page Revision Summary
+## 20. One-Page Revision Summary
 
 1. **VM** = a software-created computer emulating a separate physical one. It cannot interfere with the host or other VMs, runs its own kernel, and is managed by a hypervisor. **Examples:** AWS EC2, Google Compute Engine, Azure VMs.
 2. **Hypervisor** = software that creates and manages VMs and controls hardware. Stack from bottom: **server hardware → hypervisor → VMs (each with own OS) → apps.** The tenant boots an OS on the VM and launches apps.
@@ -674,6 +1126,12 @@ No. The JVM is **software emulation** (byte-code interpretation, used for portab
 8. **Four-step timeline:** Hypervisor boot → Guest OS start (kernel mode) → App launch (user mode, full speed) → System call trap (back to kernel or hypervisor mode).
 9. **Hierarchy of trust:** the hypervisor is completely trusted and must configure isolation correctly. Guest OSes and apps are lower trust and hardware-restricted. Illegal actions are **trapped by hardware** back to the governing layer.
 10. **Big picture:** hardware-enforced privilege levels are what make **fast, isolated, multi-tenant** cloud VMs possible.
+11. **Hypervisor location:** directly on the hardware, **below all guest OSes** (Type 1, used in the cloud). Type 2 (VirtualBox) runs on top of a host OS. Hypervisor jobs: divide, isolate, control real hardware.
+12. **Full vs para (core difference):** full = guest does not know it is virtual (unmodified, privileged actions **trapped**); para = guest knows (modified, **asks** via hypercalls). *Full: "you don't know, I'll handle it." Para: "you know, so ask me."*
+13. **Para's usefulness:** fast I/O (via drivers like VirtIO), older CPUs, easy-to-modify open-source guests. Modern clouds use **full virtualization + para-virtualized I/O drivers**.
+14. **Why para I/O is fast:** the guest skips pretending to use real hardware, uses a shared memory queue and one direct request (often batched), so far fewer traps and no device emulation.
+15. **CPU rings:** ring 0 = kernel, ring 3 = user. Hardware-assisted virtualization (VT-x, AMD-V) adds a level below ring 0 ("ring -1") for the hypervisor, which makes full virtualization fast. This equals the lecture's three modes.
+16. **File upload flow:** App -> kernel (checks, RAM, virtual disk) -> hypervisor -> real disk. Kernel works alone **inside its VM's walls**; the hypervisor handles **real hardware and anything outside the VM**. Virtual disk is not virtual memory.
 
 ---
 
