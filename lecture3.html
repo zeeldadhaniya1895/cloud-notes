@@ -379,8 +379,26 @@
                 // Parse markdown
                 contentContainer.innerHTML = marked.parse(markdown);
                 
+                // Add IDs to headings if missing (Marked v5+ doesn't generate them by default)
+                contentContainer.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+                    if (!heading.id) {
+                        heading.id = heading.textContent
+                            .toLowerCase()
+                            .replace(/[^\w\s-]/g, '')
+                            .replace(/\s+/g, '-');
+                    }
+                });
+                
                 // Generate Dynamic Table of Contents
                 buildTOC();
+
+                // Handle hash navigation after async load
+                if (window.location.hash) {
+                    setTimeout(() => {
+                        const target = document.getElementById(window.location.hash.substring(1));
+                        if (target) target.scrollIntoView();
+                    }, 100);
+                }
 
             } catch (error) {
                 contentContainer.innerHTML = `
